@@ -1,0 +1,53 @@
+job "nginx-job" {
+
+  datacenters = [ "dc1" ]
+
+  type = "service"
+
+  group "nginx" {
+    count = 1
+
+    network {
+      mode = "bridge"
+      port "http" {
+        to = -1
+      }
+    }
+
+    task "nginx-task" {
+      driver = "docker"
+
+      config {
+        image = "nginx:alpine"
+        labels {
+          app = "nginx"
+        }
+        ports = [ "http" ]
+      }
+
+      env {
+        PORT = "80"
+      }
+
+      resources {
+        cpu = 100
+        memory = 100
+      }
+    }
+
+    service {
+      name = "nginx-svc"
+      port = "http"
+
+      # connect {
+      #   sidecar_service {}
+      # }
+
+      tags = [
+        "traefik.enable=true",
+        "traefik.http.routers.http.rule=Path(`/myapp`)",
+      ]
+    }
+  }
+
+}

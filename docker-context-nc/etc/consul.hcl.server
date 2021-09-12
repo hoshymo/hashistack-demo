@@ -1,0 +1,26 @@
+datacenter = "dc1"
+data_dir = "/opt/consul"
+
+#
+# bind_addr = "{{ GetInterfaceIP \"eth1\" }}"
+
+client_addr = "0.0.0.0"
+
+# Web UI
+ui_config {
+  enabled = true
+}
+
+#
+server = true
+log_level = "INFO"
+bootstrap_expect = 1
+
+# Consul Connect
+connect {
+  enabled = true
+}
+
+ports {
+  grpc = 8502
+}

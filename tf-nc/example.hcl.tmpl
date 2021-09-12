@@ -1,0 +1,114 @@
+job "web-job" {
+
+  datacenters = [ "dc1" ]
+
+  type = "service"
+
+  group "api" {
+    network {
+      mode = "bridge"
+    }
+
+    task "counting-task" {
+      driver = "exec"
+
+      config {
+        # Nomad collects bins from limited paths
+        # https://www.nomadproject.io/docs/drivers/exec#chroot
+        command = "/usr/local/exampleapp/bin/counting-service_linux_amd64"
+        args    = [ "-flag", "1" ]
+      }
+
+      env {
+        PORT = "9003"
+      }
+
+      resources {
+        cpu = 100
+        memory = 100
+#        network {
+#          mbits = 1
+#        }
+      }
+    }
+
+    service {
+      name = "counting"
+      port = "9003"
+
+      connect {
+        sidecar_service {}
+      }
+
+      #check {
+      #  name     = "counting-check"
+      #  type     = "http"
+      #  port     = 9003
+      #  path     = "/health"
+      #  method   = "GET"
+      #  interval = "30s"
+      #  timeout  = "1s"
+      #}
+    }
+  }
+
+  group "dashboard" {
+    network {
+      mode = "bridge"
+
+      port "dashboard" {
+        static = 9002
+        to     = 9002
+      }
+    }
+
+    task "dashboard-task" {
+      driver = "exec"
+
+      config {
+        command = "/usr/local/exampleapp/bin/dashboard-service_linux_amd64"
+        args    = [ "-flag", "1" ]
+      }
+
+      env {
+        PORT = "9002"
+        COUNTING_SERVICE_URL = "http://localhost:5000"
+      }
+
+      resources {
+        cpu = 100
+        memory = 100
+      }
+    }
+
+    service {
+      name = "dashboard"
+      port = "dashboard"
+      tags = ["leader", "mysql"]
+      meta {
+        meta = "counting service"
+      }
+
+      connect {
+        sidecar_service {
+          proxy {
+            upstreams {
+                destination_name = "counting"
+                local_bind_port  = 5000
+            }
+          }
+        }
+      }
+
+      #check {
+      #  name     = "dashboard-check"
+      #  type     = "http"
+      #  port     = 9002
+      #  path     = "/health"
+      #  method   = "GET"
+      #  interval = "30s"
+      #  timeout  = "1s"
+      #}
+    }
+  }
+}

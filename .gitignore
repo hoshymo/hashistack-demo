@@ -1,0 +1,3 @@
+*/.terraform*
+memo.txt
+*.tfstate*

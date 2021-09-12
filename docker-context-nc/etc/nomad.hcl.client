@@ -1,0 +1,12 @@
+
+data_dir = "/opt/nomad/data"
+bind_addr = "0.0.0.0"
+
+client {
+  enabled = true
+  servers = [ "n_s1" ]
+}
+
+consul {
+  address = "127.0.0.1:8500"
+}

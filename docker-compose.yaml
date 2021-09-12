@@ -1,0 +1,95 @@
+version: "3.9"
+
+services:
+
+  # Nomad client
+  n_c1: &nomad_common
+    image: hashistack:latest
+    build: docker-context-nc
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+      - type: bind
+        source: /var/run/docker/netns
+        target: /var/run/docker/netns
+        bind:
+          propagation: shared
+      - type: bind
+        source: /opt/nomad/data/alloc
+        target: /opt/nomad/data/alloc
+        bind:
+          propagation: shared
+    init: true
+    # need to be privileged container so Nomad client can mount tmpfs 
+    privileged: true
+
+  # Nomad server
+  n_s1:
+    <<: *nomad_common
+    environment:
+      - X_NOMAD_MODE=server
+      - X_CONSUL_MODE=server
+    ports:
+      - "9002:9002"
+      - "4646:4646" # Nomad web UI
+      - "8500:8500" # Consul web UI
+    volumes:
+      - ./tf-nc:/workspace/tf-nc
+      - ./tf-boundary:/workspace/tf-boundary
+
+
+  # Boundary
+  boundary-server:
+    image: hashicorp/boundary
+    environment:
+      - BOUNDARY_POSTGRES_URL=postgresql://postgres:postgres@boundary-db:5432/postgres?sslmode=disable
+      - BOUNDARY_KEYRING_TYPE=none
+    # volumes:
+    #   - ./etc/boundary.hcl:/boundary/config.hcl
+    depends_on:
+      - boundary-db
+    command: >
+      ash -c 'until nc -v -w 1 boundary-db 5432; do
+        echo "Waiting for DB port ..."
+        sleep 3
+      done
+      && boundary database init -config /boundary/config.hcl
+      && boundary server -config /boundary/config.hcl'
+    ports:
+      - "9200:9200" # Boundary web UI
+      - "9201:9201"
+      - "9202:9202"
+    privileged: true # start Boundary with IPC_LOCK
+
+  boundary-db:
+    image: postgres:alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+
+  # Boundary から接続する sshd target
+  # https://github.com/panubo/docker-sshd
+  sshd_target1:
+    image: panubo/sshd
+    volumes:
+      - ./example-setpasswd.sh:/etc/entrypoint.d/setpasswd.sh
+    environment:
+      - SSH_USERS=user1:1000:1000:/bin/bash
+      - SSH_ENABLE_PASSWORD_AUTH=true
+    ports:
+      - "2222:22"
+
+  # Vault
+  v1:
+    image: vault
+    ports:
+      - "8200:8200" # Vault web UI
+    # environment:
+      # - VAULT_DEV_ROOT_TOKEN_ID=root
+      # - VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+      # - VAULT_LOCAL_CONFIG={"backend": {"file": {"path": "/vault/file"}}, "default_lease_ttl": "168h", "max_lease_ttl": "720h"}
+    cap_add:
+      - IPC_LOCK
